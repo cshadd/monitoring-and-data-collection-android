@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.Frame;
@@ -32,36 +33,30 @@ import com.opencsv.CSVWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
     private static final double MIN_OPENGL_VERSION = 3.0;
     private static final String STORAGE_DIRECTORY = android.os.Environment.getExternalStorageDirectory().getAbsolutePath();
-    private static final String STORAGE_LOG_FILE_PATH_PREFIX = STORAGE_DIRECTORY + File.separator + "cshadd_monitoring_and_data_collection_log_";
+    private static final String STORAGE_LOG_FILE_PATH_PREFIX = STORAGE_DIRECTORY + File.separator + "cshadd_madca.log";
 
     private SpecialArFragment arFragment;
     private ModelRenderable andyRenderable;
     private TransformableNode andy;
     private float currentLight;
     private Sensor lightSensor;
-    private List<String[]> logArDirection;
-    private List<String[]> logArIntensity;
-    private List<String[]> logArHarmonics;
-    private List<String[]> logArPixelIntensity;
-    private List<String[]> logSensorLight;
-    private SensorEventListener lightSensorListener;
+    private List<String[]> logData;
+    private SensorEventListener sensorListener;
     private SensorManager sensorManager;
 
     public MainActivity() {
         super();
         this.currentLight = 0f;
-        this.logArDirection = new ArrayList<>();
-        this.logArIntensity = new ArrayList<>();
-        this.logArHarmonics = new ArrayList<>();
-        this.logArPixelIntensity = new ArrayList<>();
-        this.logSensorLight = new ArrayList<>();
+        this.logData = new ArrayList<>();
         return;
     }
 
@@ -76,8 +71,11 @@ public class MainActivity extends AppCompatActivity {
         super.setContentView(R.layout.activity_main);
 
         this.sensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
-        this.lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
-        this.lightSensorListener = new SensorEventListener(){
+        final List<Sensor> lightSensors = sensorManager.getSensorList(Sensor.TYPE_LIGHT);
+        if (lightSensors.size() > 0) {
+            this.lightSensor = lightSensors.get(0);
+        }
+        this.sensorListener = new SensorEventListener(){
             @Override
             public void onAccuracyChanged(Sensor sensor, int accuracy) {
                 return;
@@ -85,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onSensorChanged(SensorEvent event) {
-                if (event.sensor.getType() == Sensor.TYPE_LIGHT){
+                if (event.sensor.getType() == Sensor.TYPE_LIGHT) {
                     currentLight = event.values[0];
                 }
                 return;
@@ -123,8 +121,6 @@ public class MainActivity extends AppCompatActivity {
 
     @SuppressLint("NewApi")
     private void buildAr() {
-        // When you build a Renderable, Sceneform loads its resources in the background while returning
-        // a CompletableFuture. Call thenAccept(), handle(), or check isDone() before calling get().
         ModelRenderable.builder()
                 .setSource(this, R.raw.andy)
                 .build()
@@ -140,7 +136,6 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // Create the Anchor.
             final Anchor anchor = hitResult.createAnchor();
             final AnchorNode anchorNode = new AnchorNode(anchor);
             anchorNode.setParent(this.arFragment.getArSceneView().getScene());
@@ -151,52 +146,41 @@ public class MainActivity extends AppCompatActivity {
             }
 
             this.andy = new TransformableNode(this.arFragment.getTransformationSystem());
-
             this.andy.setParent(anchorNode);
             this.andy.setRenderable(this.andyRenderable);
             this.andy.select();
 
             try {
-                final Date date = new Date();
-
                 final Session session = this.arFragment.getArSceneView().getSession();
                 final Frame frame = session.update();
 
                 // Get the light estimate for the current frame.
                 final LightEstimate lightEstimate = frame.getLightEstimate();
 
-                // Get intensity and direction of the main directional light from the current light estimate.
-                final float[] intensity = lightEstimate.getEnvironmentalHdrMainLightIntensity(); // note - currently only out param.
-                final float[] direction = lightEstimate.getEnvironmentalHdrMainLightDirection();
-
-                // Get ambient lighting as spherical harmonics coefficients.
-                final float[] harmonics = lightEstimate.getEnvironmentalHdrAmbientSphericalHarmonics();
-
-                final float pixelIntensity = lightEstimate.getPixelIntensity();
-
-                final List<String> directionStrings = new ArrayList<>();
-                directionStrings.add(date.toString());
-                for (int i = 0; i < direction.length; i++) {
-                    directionStrings.add("" + direction[i]);
+                if (this.logData.size() == 10) {
+                    try {
+                        Toast.makeText(this, "Logging!", Toast.LENGTH_SHORT).show();
+                        this.logCSV(this.logData);
+                        this.logData.clear();
+                    }
+                    catch (IOException e) {
+                        Log.e("NOGA", "Could not log data due to " + e);
+                        e.printStackTrace();
+                    }
+                    catch (Exception e) {
+                        Log.e("NOGA", "Could not log data due to " + e);
+                        e.printStackTrace();
+                    }
+                    finally { }
                 }
-
-                final List<String> harmonicsStrings = new ArrayList<>();
-                harmonicsStrings.add(date.toString());
-                for (int i = 0; i < direction.length; i++) {
-                    harmonicsStrings.add("" + harmonics[i]);
+                else {
+                    Toast.makeText(this, "Sent to log!", Toast.LENGTH_SHORT).show();
+                    this.logData.add(new String[] {
+                            "" + hitResult.getDistance(),
+                            "" + lightEstimate.getPixelIntensity(),
+                            "" + this.currentLight,
+                    });
                 }
-
-                final List<String> intensityStrings = new ArrayList<>();
-                intensityStrings.add(date.toString());
-                for (int i = 0; i < intensity.length; i++) {
-                    intensityStrings.add("" + intensity[i]);
-                }
-
-                this.logArDirection.add(directionStrings.toArray(new String[0]));
-                this.logArIntensity.add(intensityStrings.toArray(new String[0]));
-                this.logArHarmonics.add(harmonicsStrings.toArray(new String[0]));
-                this.logArPixelIntensity.add(new String[] {date.toString(), "" + pixelIntensity});
-                this.logSensorLight.add(new String[] {date.toString(), "" + currentLight});
             }
             catch (CameraNotAvailableException e) {
                 Log.i("NOGA", "Could not calculate light data due to " + e);
@@ -229,11 +213,12 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
-    private void logCSV(String fileName, List<String[]> data) throws IOException {
-        final String name = MainActivity.STORAGE_LOG_FILE_PATH_PREFIX + fileName + ".csv";
-        Log.w("NOGA", "Logging to " + name);
+    private void logCSV(List<String[]> data) throws IOException {
+        final String timestamp = new SimpleDateFormat("yyyyMMddHHmm", Locale.US).format(new Date());
+        final String name = MainActivity.STORAGE_LOG_FILE_PATH_PREFIX + "." + timestamp + ".csv";
+        Log.w("NOGA", "Logging " +  data.size() + " items to " + name);
 
-        final CSVWriter writer = new CSVWriter(new FileWriter(name, true));
+        final CSVWriter writer = new CSVWriter(new FileWriter(name));
         writer.writeAll(data);
         writer.close();
         return;
@@ -242,8 +227,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (this.sensorManager != null && this.lightSensor != null && this.lightSensorListener != null) {
-            sensorManager.registerListener(this.lightSensorListener, this.lightSensor, 6);
+        if (this.sensorManager != null && this.sensorListener != null) {
+            if (this.lightSensor != null) {
+                sensorManager.registerListener(this.sensorListener, this.lightSensor, SensorManager.SENSOR_DELAY_NORMAL);
+            }
         }
         return;
     }
@@ -251,26 +238,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        if (this.sensorManager != null && this.lightSensorListener != null) {
-            this.sensorManager.unregisterListener(this.lightSensorListener);
+        if (this.sensorManager != null && this.sensorListener != null) {
+            this.sensorManager.unregisterListener(this.sensorListener);
         }
-        try {
-            this.logCSV("ar_direction", this.logArDirection);
-            this.logCSV("ar_intensity", this.logArIntensity);
-            this.logCSV("ar_harmonics", this.logArHarmonics);
-            this.logCSV("ar_pixel_intensity", this.logArPixelIntensity);
-            this.logCSV("sensor_light", this.logSensorLight);
-        }
-        catch (IOException e) {
-            Log.e("NOGA", "Could not log data due to " + e);
-            e.printStackTrace();
-        }
-        catch (Exception e) {
-            Log.e("NOGA", "Could not log data due to " + e);
-            e.printStackTrace();
-        }
-        finally { }
-
+        this.logData.clear();
         return;
     }
 }

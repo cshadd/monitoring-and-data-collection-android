@@ -14,8 +14,8 @@ public class SpecialArFragment extends ArFragment {
     @Override
     protected Config getSessionConfiguration(Session session) {
         final Config config = super.getSessionConfiguration(session);
-        // config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL);
-        // config.setLightEstimationMode(Config.LightEstimationMode.ENVIRONMENTAL_HDR);
+        config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL);
+        config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         return config;
     }
 }
