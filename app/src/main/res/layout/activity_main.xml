@@ -5,10 +5,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
-
-    <fragment android:name="SpecialArFragment"
+    <fragment android:name="io.github.cshadd.monitoring_and_data_collection_android.SpecialArFragment"
         android:id="@+id/ux_fragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
-
 </FrameLayout>
