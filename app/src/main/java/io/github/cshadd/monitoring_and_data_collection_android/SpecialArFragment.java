@@ -1,3 +1,5 @@
+package io.github.cshadd.monitoring_and_data_collection_android;
+
 import com.google.ar.core.Config;
 import com.google.ar.core.Session;
 import com.google.ar.sceneform.ux.ArFragment;
